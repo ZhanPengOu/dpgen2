@@ -9,12 +9,12 @@ from . import (
 from .lmp import (
     make_lmp_input,
     make_lmp_template_input,
-    make_plm_template_input
+    make_plm_template_input,
 )
 from dpgen2.constants import (
     lmp_conf_name, 
     lmp_input_name,
-    plm_input_name
+    plm_input_name,
     model_name_pattern,
 )
 

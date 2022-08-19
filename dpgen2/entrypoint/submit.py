@@ -241,7 +241,7 @@ def make_naive_exploration_scheduler(
                 plm_temp = job["rev_mat"]["plm"]["V_TEMP"]
                 stride = job["rev_mat"]["plm"]["V_STRIDE"]
                 tgroup.set_plm(
-                    temps = plm_temp
+                    temps = plm_temp,
                     stride = stride,
                 )
                 task = tgroup.make_plm_task()
