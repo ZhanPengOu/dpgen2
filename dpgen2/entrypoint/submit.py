@@ -205,60 +205,125 @@ def make_naive_exploration_scheduler(
     max_numb_iter = config['max_numb_iter']
     fatal_at_max = config.get('fatal_at_max', True)
     scheduler = ExplorationScheduler()
+    use_plm = config.get("model_devi_plumed", False)
 
     for job in model_devi_jobs:
-        # task group
-        tgroup = NPTTaskGroup()
-        ##  ignore the expansion of sys_idx
-        # get all file names of md initial configuraitons
-        sys_idx = job['sys_idx']
-        conf_list = []        
-        for ii in sys_idx:
-            conf_list += make_conf_list(sys_configs[ii], type_map)
-        # add the list to task group
-        n_sample = job.get('n_sample')
-        tgroup.set_conf(
-            conf_list,
-            n_sample=n_sample,
-        )
-        temps = job['temps']
-        press = job['press']
-        trj_freq = job['trj_freq']
-        nsteps = job['nsteps']
-        ensemble = job['ensemble']
-        # add md settings
-        tgroup.set_md(
-            numb_models,
-            mass_map,
-            temps = temps,
-            press = press,
-            ens = ensemble,
-            nsteps = nsteps,
-        )
-        tasks = tgroup.make_task()
-        # stage
-        stage = ExplorationStage()
-        stage.add_task_group(tasks)
-        # trust level
-        trust_level = TrustLevel(
-            config['model_devi_f_trust_lo'],
-            config['model_devi_f_trust_hi'],
-        )
-        # selector
-        selector = ConfSelectorLammpsFrames(
-            trust_level,
-            fp_task_max,
-        )
-        # stage_scheduler
-        stage_scheduler = ConvergenceCheckStageScheduler(
-            stage,
-            selector,
-            conv_accuracy = conv_accuracy,
-            max_numb_iter = max_numb_iter,
-            fatal_at_max = fatal_at_max,
-        )
-        # scheduler
-        scheduler.add_stage_scheduler(stage_scheduler)
+        ## when user offer template
+        if "template" in jobs:
+            lmp_template_path = job["template"]["lmp"]
+            lmp_template_path = os.path.abspath(lmp_template_path)
+            if(use_plm):
+                plm_template_path = job["template"]["plm"]
+                plm_template_path = os.path.abspath(plm_template_path)
+            
+            tgroup = ReviseTaskGroup()
+            sys_idx = job['sys_idx']
+            conf_list = []
+            for ii in sys_idx:
+                conf_list += make_conf_list(sys_configs[ii], type_map)
+
+            n_sample = job.get('n_sample')
+            tgroup.set_conf(
+                conf_list,
+                n_sample = n_sample
+            )
+            temps = job['rev_mat']['lmp']['V_TEMP']
+            press = job['rev_mat']['lmp']['V_PRES']
+            nsteps = job['rev_mat']['lmp']['V_TEMP']
+            tgroup.set_md(
+                numb_models,
+                mass_map,
+                temps = temps,
+                press = press, 
+                nsteps = nsteps,
+            )
+            if(use_plm):
+                plm_temp = job["rev_mat"]["plm"]["V_TEMP"]
+                stride = job["rev_mat"]["plm"]["V_STRIDE"]
+                tgroup.set_plm(
+                    temps = plm_temp
+                    stride = stride,
+                )
+                task = tgroup.make_plm_task()
+            else:
+                task = tgroup.make_task()
+            # stage
+            stage = ExplorationStage()
+            stage.add_task_group(tasks)
+            # trust level
+            trust_level = TrustLevel(
+                config['model_devi_f_trust_lo'],
+                config['model_devi_f_trust_hi'],
+            )
+            # selector
+            selector = ConfSelectorLammpsFrames(
+                trust_level,
+                fp_task_max,
+            )
+            # stage_scheduler
+            stage_scheduler = ConvergenceCheckStageScheduler(
+                stage,
+                selector,
+                conv_accuracy = conv_accuracy,
+                max_numb_iter = max_numb_iter,
+                fatal_at_max = fatal_at_max,
+            )
+            # scheduler
+            scheduler.add_stage_scheduler(stage_scheduler)
+            
+        else:
+            # task group
+            tgroup = NPTTaskGroup()
+            ##  ignore the expansion of sys_idx
+            # get all file names of md initial configuraitons
+            sys_idx = job['sys_idx']
+            conf_list = []        
+            for ii in sys_idx:
+                conf_list += make_conf_list(sys_configs[ii], type_map)
+            # add the list to task group
+            n_sample = job.get('n_sample')
+            tgroup.set_conf(
+                conf_list,
+                n_sample=n_sample,
+            )
+            temps = job['temps']
+            press = job['press']
+            trj_freq = job['trj_freq']
+            nsteps = job['nsteps']
+            ensemble = job['ensemble']
+            # add md settings
+            tgroup.set_md(
+                numb_models,
+                mass_map,
+                temps = temps,
+                press = press,
+                ens = ensemble,
+                nsteps = nsteps,
+            )
+            tasks = tgroup.make_task()
+            # stage
+            stage = ExplorationStage()
+            stage.add_task_group(tasks)
+            # trust level
+            trust_level = TrustLevel(
+                config['model_devi_f_trust_lo'],
+                config['model_devi_f_trust_hi'],
+            )
+            # selector
+            selector = ConfSelectorLammpsFrames(
+                trust_level,
+                fp_task_max,
+            )
+            # stage_scheduler
+            stage_scheduler = ConvergenceCheckStageScheduler(
+                stage,
+                selector,
+                conv_accuracy = conv_accuracy,
+                max_numb_iter = max_numb_iter,
+                fatal_at_max = fatal_at_max,
+            )
+            # scheduler
+            scheduler.add_stage_scheduler(stage_scheduler)
         
     return scheduler
 

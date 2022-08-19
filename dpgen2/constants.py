@@ -10,6 +10,7 @@ lmp_input_name = 'in.lammps'
 lmp_traj_name = 'traj.dump'
 lmp_log_name = 'log.lammps'
 lmp_model_devi_name = 'model_devi.out'
+plm_input_name = 'input.plumed'
 vasp_index_pattern = '%06d'
 vasp_task_pattern = 'task.' + vasp_index_pattern
 vasp_conf_name = 'POSCAR'
@@ -21,5 +22,3 @@ vasp_default_out_data_name = 'data'
 
 default_image = 'dptechnology/dpgen2:latest'
 default_host = '127.0.0.1:2746'
-
-"from zpou"

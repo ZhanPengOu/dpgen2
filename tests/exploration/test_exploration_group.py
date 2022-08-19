@@ -12,8 +12,9 @@ except ModuleNotFoundError:
 from dpgen2.exploration.task import (
     NPTTaskGroup, 
     ExplorationStage,
+    ReviseTaskGroup,
 )
-from dpgen2.constants import lmp_conf_name, lmp_input_name
+from dpgen2.constants import lmp_conf_name, lmp_input_name, plm_input_name
 from unittest.mock import Mock, patch
 
 in_template_npt = textwrap.dedent("""variable        NSTEPS          equal 1000
@@ -82,6 +83,43 @@ timestep        0.001000
 run             ${NSTEPS} upto
 """)
 
+in_template_plm = textwrap.dedent("""variable        NSTEPS          equal %f
+variable        THERMO_FREQ     equal 10
+variable        DUMP_FREQ       equal 10
+variable        TEMP            equal %f
+variable        PRES            equal %f
+variable        TAU_T           equal 0.100000
+variable        TAU_P           equal 0.500000
+
+#Initialization
+units           metal
+dimension       3
+atom_style      atomic
+
+read_data       conf.lmp
+mass            1 12.011
+mass            2  1.008
+
+#Interatomic potentials - DeepMD
+pair_style      deepmd model.000.pb model.001.pb model.002.pb  out_freq ${THERMO_FREQ} out_file model_devi.out 
+pair_coeff      * *
+
+#MD parameters
+timestep        0.0005 #ps
+velocity       all create ${TEMP} 1815191 mom yes rot yes dist gaussian
+
+#Run MD - equil at 300K
+run_style      verlet #Velocity verlet
+fix            dpgen_plm all plumed plumedfile input.plumed outfile output.plumed
+fix            1 all nvt temp ${TEMP} ${TEMP} 0.1 #NH thermostat - 300K with 100 fs frequency
+fix            2 all momentum 1 linear 0 0 0 #Remove total linear momentum of the system at each step
+fix            3 all recenter INIT INIT INIT
+thermo_style   custom step temp pe etotal press #Setting printing
+thermo         ${THERMO_FREQ} #Ouputing thermodynamic properties
+dump           dpgen_dump all custom ${DUMP_FREQ} traj/*.lammpstrj id type x y z\n
+#dump          2 all custom 100 vel.xyz id type vx vy vz
+run            ${NSTEPS} #25 ps
+""")
 
 
 def swap_element(arg):
@@ -328,6 +366,63 @@ class TestCPTGroup(unittest.TestCase):
                 in_template_nvt % (self.tt[j_idx]),
             )
 
+class TestPLMGroup(unittest.TestCase):
+
+    @patch('dpgen2.exploration.task.lmp.lmp_input.random')
+    def test_revise(self,mock_random):
+        mock_random.randrange.return_value = 1110
+        self.conf = ['foo', 'bar']
+        self.tt = [100, 200]
+        self.ttp = [100, 200]
+        self.stride = 10,
+        self.numb_model = 3
+        self.mass_map = [10, 20]
+
+        lmp_template_path="../../examples/lmp_enhance_sampling/input/input.lammps",
+        plm_template_path="../../examples/lmp_enhance_sampling/input/input.plumed"
+
+        lmp_group = ReviseTaskGroup()
+        lmp_group.set_md(
+            self.numb_model,
+            self.mass_map,
+            self.tt,
+            self.pp,
+            self.nsteps,
+        )
+        task_group_1 = lmp_group.make_task()
+
+        plm_group = ReviseTaskGroup()
+        plm_group.set_md(
+            self.numb_model,
+            self.mass_map,
+            self.tt,
+            self.pp,
+            self.nsteps,
+        )
+        plm_group.set_plm(
+            self.ttp,
+            self.stride,
+        )
+        task_group_2 = plm_group.make_plm_task() 
+
+        ngroup_1 = len(task_group_1)
+        self.assertEqual(ngroup_1, len(self.confs) * len(self.tt) * len(self.pp))
+
+        ngroup_2 = len(task_group_2)
+        self.assertEqual(ngroup_2, len(self.confs) * len(self.tt) * len(self.ttp) * len(self.pp))
+
+        for ii in range(ngroup_1):
+            i_idx = ii // (len(self.tt) * len(self.pp))
+            j_idx = (ii - len(self.tt) * len(self.pp) * i_idx) // len(self.pp)
+            k_idx = (ii - len(self.tt) * len(self.pp) * i_idx - len(self.pp) * j_idx)
+            self.assertEqual(
+                task_group_1[ii].files()[lmp_conf_name],
+                self.confs[i_idx],
+            )
+            self.assertEqual(
+                task_group_1[ii].files()[lmp_input_name], 
+                in_template_npt % (self.tt[j_idx], self.pp[k_idx]),
+            )
 
 class TestCPTStage(unittest.TestCase):
     # def setUp(self):
