@@ -1,1 +1,3 @@
 from .lmp_input import make_lmp_input
+from .lmp_template_input import make_lmp_template_input
+from .plm_template_input import make_plm_template_input
